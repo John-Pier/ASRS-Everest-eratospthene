@@ -240,11 +240,11 @@ int main()
 	teng.run();
 
 	if (eng.stopped()) {
-		std::cout << "All primes found" << std::endl;
+		std::cout << "All primes are found" << std::endl;
 
 		std::cout << "Maximum number of tasks executed in parallel : " << teng.Pmax() << std::endl;
 		std::cout << "Time of sequential execution of all tasks    : " << teng.T1() << std::endl;
-		std::cout << "Time of parallel   execution of all tasks    : " << teng.Tp() << std::endl;
+		std::cout << "Time of parallel execution of all tasks      : " << teng.Tp() << std::endl;
 		std::cout << "Speedup of parallel execution                : " << teng.T1() / teng.Tp() << std::endl;
 		std::cin.get();
 		return EXIT_SUCCESS;

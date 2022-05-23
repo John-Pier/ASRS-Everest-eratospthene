@@ -64,12 +64,10 @@ struct source :public templet::actor {
 
 	inline void on_out(brick& m) {
 		/*$TET$source$out*/
-		if (number_of_bricks > 0) {
+	//	if (number_of_bricks > 0) {
 			out.brick_ID = number_of_bricks++;
 			out.send();
-
-			//std::cout << "the source worker passes a brick #" << m.brick_ID << std::endl;
-		}
+	//	}
 		/*$TET$*/
 	}
 
@@ -101,7 +99,7 @@ struct mediator :public templet::actor {
 	{
 		/*$TET$mediator$mediator*/
 		_in = 0;
-        prime = 0;
+        prime_value = 0;
 		/*$TET$*/
 	}
 
@@ -148,23 +146,23 @@ struct mediator :public templet::actor {
 	}
 
 	void pass_a_brick() {
-		if (prime) {
-			if (brick_ID % prime == 0) {
+		if (prime_value) {
+			if (brick_ID % prime_value == 0) {
                 return;
             }
 			out.brick_ID = brick_ID;
 			out.send();
 		}
 		else {
-			prime = brick_ID;
-			std::cout << mediator_ID <<": " << "set prime in mediator: " << prime << std::endl;
+            prime_value = brick_ID;
+			std::cout << mediator_ID <<": " << "set prime in mediator: " << prime_value << std::endl;
 		}
 	}
 
 	brick* _in;
 	int brick_ID;
 	int mediator_ID;
-	int prime;
+	int prime_value;
 	/*$TET$*/
 };
 
@@ -194,7 +192,7 @@ struct destination :public templet::actor {
 
 	inline void on_in(brick& m) {
 		/*$TET$destination$in*/
-        std::cout << "set prime in destination: " << m.brick_ID << std::endl;
+        std::cout << "Finish! set prime in destination: " << m.brick_ID << std::endl;
 		if (number_of_bricks == 0) {
             stop();
         }

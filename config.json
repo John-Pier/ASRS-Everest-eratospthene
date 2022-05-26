@@ -2,7 +2,7 @@
   "resource": {
     "tasksDir": "tasks",
     "taskHandler": {
-      "type": "local"
+      "type": "docker"
     },
     "maxTasks": 1,
     "checkTime": 5,
@@ -17,7 +17,7 @@
     "activeMode": {
       "enabled": true,
       "serverURI": "wss://everest.distcomp.org/compute/agent/v1",
-      "agentToken": "5ferfq5y2njexzmutqjuessqtusnbvx6"
+      "agentToken": "kbf3hkzrtia3kf0gk09vfpf5vspcbmxs"
     },
     "passiveMode": {
       "enabled": false,

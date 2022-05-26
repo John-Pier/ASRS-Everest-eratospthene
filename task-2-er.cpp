@@ -1,25 +1,8 @@
-/*$TET$$header*/
-/*--------------------------------------------------------------------------*/
-/*  Copyright 2021 Sergei Vostokin                                          */
-/*                                                                          */
-/*  Licensed under the Apache License, Version 2.0 (the "License");         */
-/*  you may not use this file except in compliance with the License.        */
-/*  You may obtain a copy of the License at                                 */
-/*                                                                          */
-/*  http://www.apache.org/licenses/LICENSE-2.0                              */
-/*                                                                          */
-/*  Unless required by applicable law or agreed to in writing, software     */
-/*  distributed under the License is distributed on an "AS IS" BASIS,       */
-/*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*/
-/*  See the License for the specific language governing permissions and     */
-/*  limitations under the License.                                          */
-/*--------------------------------------------------------------------------*/
-
 #define _CRT_SECURE_NO_DEPRECATE
 
 const int NUMBER_OF_MEDIATORS = 6;
-const int NUMBER_OF_BRICKS = 1;
-const int NUMBER_OF_MAX_BRICKS = 100;
+const char* APP_ID = "628e8cb61300001000f9e774";
+const char* TOKEN = "67lmsc3r1b6ga82b1tf2mkrnoyu2sk2681tmebaw2gaihppk0dwflgycial1xppc";
 
 #pragma cling load("libcurl")
 
@@ -29,25 +12,25 @@ const int NUMBER_OF_MAX_BRICKS = 100;
 #include <iostream>
 #include <ctime>
 
-class brick : public templet::message {
+class ActorMessage : public templet::message {
 public:
-    brick(templet::actor *a = 0, templet::message_adaptor ma = 0) : templet::message(a, ma) {}
-
-    int brick_ID;
+    ActorMessage(templet::actor *a = 0, templet::message_adaptor ma = 0) : templet::message(a, ma) {
+    }
+    int current_value;
 };
 
-#pragma templet !source(out!brick)
+#pragma templet !SourceActor(out!ActorMessage)
 
-struct source : public templet::actor {
+struct SourceActor : public templet::actor {
     static void on_out_adapter(templet::actor *a, templet::message *m) {
-        ((source *) a)->on_out(*(brick *) m);
+        ((SourceActor *) a)->on_out(*(ActorMessage *) m);
     }
 
-    source(templet::engine &e) : source() {
-        source::engines(e);
+    SourceActor(templet::engine &e) : SourceActor() {
+        SourceActor::engines(e);
     }
 
-    source() : templet::actor(true), out(this, &on_out_adapter) {
+    SourceActor() : templet::actor(true), out(this, &on_out_adapter) {
     }
 
     void engines(templet::engine &e) {
@@ -58,47 +41,41 @@ struct source : public templet::actor {
         on_out(out);
     }
 
-    inline void on_out(brick &m) {
-        if (number_of_bricks < NUMBER_OF_MAX_BRICKS) {
-            out.brick_ID = number_of_bricks++;
-            std::cout << "Source send brick: " << out.brick_ID << std::endl;
-            out.send();
-        } else {
-            std::cout << "Source stop " << number_of_bricks << std::endl;
-            stop();
-        }
+    inline void on_out(ActorMessage &m) {
+        out.current_value = next_value++;
+        out.send();
+        std::cout << "Source send ActorMessage: " << out.current_value << std::endl;
     }
 
-    brick out;
-    int number_of_bricks = 2;
+    ActorMessage out;
+    long next_value = 2;
 };
 
-#pragma templet mediator(in?brick, out!brick, t:everest)
+#pragma templet MediatorActor(in?ActorMessage, out!ActorMessage, t:everest)
 
-struct mediator : public templet::actor {
+struct MediatorActor : public templet::actor {
     static void on_in_adapter(templet::actor *a, templet::message *m) {
-        ((mediator *) a)->on_in(*(brick *) m);
+        ((MediatorActor *) a)->on_in(*(ActorMessage *) m);
     }
 
     static void on_out_adapter(templet::actor *a, templet::message *m) {
-        ((mediator *) a)->on_out(*(brick *) m);
+        ((MediatorActor *) a)->on_out(*(ActorMessage *) m);
     }
 
     static void on_t_adapter(templet::actor *a, templet::task *t) {
-        ((mediator *) a)->on_t(*(templet::everest_task *) t);
+        ((MediatorActor *) a)->on_t(*(templet::everest_task *) t);
     }
 
-    mediator(templet::engine &e, templet::everest_engine &te_everest) : mediator() {
-        mediator::engines(e, te_everest);
+    MediatorActor(templet::engine &e, templet::everest_engine &te_everest) : MediatorActor() {
+        MediatorActor::engines(e, te_everest);
     }
 
-    mediator() : templet::actor(false),
-                 out(this, &on_out_adapter),
-                 t(this, &on_t_adapter) {
+    MediatorActor() : templet::actor(false),
+                      out(this, &on_out_adapter),
+                      t(this, &on_t_adapter) {
         _in = 0;
         prime_value = 0;
-
-        t.app_id("628e8cb61300001000f9e774");
+        t.app_id(APP_ID);
     }
 
     void engines(templet::engine &e, templet::everest_engine &te_everest) {
@@ -106,118 +83,106 @@ struct mediator : public templet::actor {
         t.engine(te_everest);
     }
 
-    inline void on_in(brick &m) {
+    inline void on_in(ActorMessage &m) {
         _in = &m;
         if (access(_in) && access(out)) {
-            brick_ID = _in->brick_ID;
-            std::cout << "on_in brick: " << brick_ID << "; Current prime: "<< prime_value << std::endl;
+            current_value_in_actor = _in->current_value;
+            std::cout << "on_in Actor: " << current_value_in_actor << "; Current prime_value: " << prime_value << std::endl;
 
             if (prime_value) {
+                json inJson;
                 inJson["name"] = "is-prime-app";
-                inJson["inputs"]["checked"] = brick_ID;
+                inJson["inputs"]["checked"] = current_value_in_actor;
                 inJson["inputs"]["prime"] = prime_value;
+
                 if (t.submit(inJson)) {
-                    std::cout << "task submit succeeded" << std::endl;
-//                _in->send();
-                } else {
-                    std::cout << "task submit failed" << std::endl;
+                    std::cout << "Task: value send in Everest app" << std::endl;
                 }
             } else {
-                prime_value = brick_ID;
-                std::cout << mediator_ID << ": " << "set prime in mediator: " << prime_value << std::endl;
+                prime_value = current_value_in_actor;
+                std::cout << mediator_ID << ": Set prime in MediatorActor: " << prime_value << std::endl;
                 _in->send();
             }
         }
     }
 
-    inline void on_out(brick &m) {
+    inline void on_out(ActorMessage &m) {
         if (access(_in) && access(out)) {
-            brick_ID = _in->brick_ID;
-            std::cout << "on_out take_a_brick: " << brick_ID << std::endl;
+            current_value_in_actor = _in->current_value;
+            std::cout << "on_out (chain) ActorMessage for value: " << current_value_in_actor << std::endl;
             _in->send();
-
-//            t.submit(inJson);
         }
     }
 
     inline void on_t(templet::everest_task &t) {
-        std::cout << "Task comlete; Brick: " << brick_ID << "; Current prime: "<< prime_value << std::endl;
+        std::cout << "on_t Actor: Task completed, current prime: " << prime_value << std::endl;
 
         json resultJson = t.result();
-        std::cout << "on_t resultJson: " << resultJson << std::endl;
 
         if (prime_value) {
             int result = resultJson["result"];
             if (result != 0) {
-                std::cout << "Value is prime for current, send next: " << brick_ID << std::endl;
-                out.brick_ID = brick_ID;
+                std::cout << mediator_ID <<": Value is prime for current, send next -> " << current_value_in_actor << std::endl;
+                out.current_value = current_value_in_actor;
                 out.send();
             } else {
                 _in->send();
             }
-//            if (brick_ID % prime_value == 0) {
-//                return;
-//            }
-
-        } else {
-//            prime_value = brick_ID;
-//            std::cout << mediator_ID << ": " << "set prime in mediator: " << prime_value << std::endl;
-//            _in->send();
         }
-
-//        _in->send();
     }
 
-    void in(brick &m) { m.bind(this, &on_in_adapter); }
+    void in(ActorMessage &m) { m.bind(this, &on_in_adapter); }
 
-    brick out;
+    ActorMessage out;
     templet::everest_task t;
-    brick *_in;
-    json inJson;
-    int brick_ID;
+    ActorMessage *_in;
+    long current_value_in_actor;
     int mediator_ID;
-    int prime_value;
+    long prime_value;
 };
 
-#pragma templet destination(in?brick)
+#pragma templet DestinationActor(in?ActorMessage)
 
-struct destination : public templet::actor {
+struct DestinationActor : public templet::actor {
     static void on_in_adapter(templet::actor *a, templet::message *m) {
-        ((destination *) a)->on_in(*(brick *) m);
+        ((DestinationActor *) a)->on_in(*(ActorMessage *) m);
     }
 
-    destination(templet::engine &e) : destination() {
-        destination::engines(e);
+    DestinationActor(templet::engine &e) : DestinationActor() {
+        DestinationActor::engines(e);
     }
 
-    destination() : templet::actor(false) {
+    DestinationActor() : templet::actor(false) {
+        last_prime_value = 0;
     }
 
     void engines(templet::engine &e) {
         templet::actor::engine(e);
     }
 
-    inline void on_in(brick &m) {
-        std::cout << "Finish! set prime in destination: " << m.brick_ID << std::endl;
+    inline void on_in(ActorMessage &m) {
+        last_prime_value = m.current_value;
+        std::cout << "Finish! Set prime in DestinationActor: " << last_prime_value << std::endl;
         stop();
     }
 
-    void in(brick &m) { m.bind(this, &on_in_adapter); }
+    void in(ActorMessage &m) { m.bind(this, &on_in_adapter); }
+
+    long last_prime_value;
 };
 
 int main() {
     templet::engine eng;
-    templet::everest_engine teng("67lmsc3r1b6ga82b1tf2mkrnoyu2sk2681tmebaw2gaihppk0dwflgycial1xppc");
-    // app id = 628e8cb61300001000f9e774
+    templet::everest_engine teng(TOKEN);
 
     if (!teng) {
-        std::cout << "task engine is not connected to the Everest server..." << std::endl;
+        std::cout << "Task engine is not connected to the Everest server..." << std::endl;
         return EXIT_FAILURE;
     }
 
-    source source_worker(eng);
-    mediator mediator_worker[NUMBER_OF_MEDIATORS];
-    destination destination_worker(eng);
+    SourceActor source_worker(eng);
+    MediatorActor mediator_worker[NUMBER_OF_MEDIATORS];
+    DestinationActor destination_worker(eng);
 
     mediator_worker[0].in(source_worker.out);
 
@@ -227,7 +192,7 @@ int main() {
 
     destination_worker.in(mediator_worker[NUMBER_OF_MEDIATORS - 1].out);
 
-//    source_worker.number_of_bricks = NUMBER_OF_BRICKS;
+    source_worker.next_value = 2;
 
     for (int i = 0; i < NUMBER_OF_MEDIATORS; i++) {
         mediator_worker[i].mediator_ID = i + 1;
@@ -241,6 +206,13 @@ int main() {
 
     if (eng.stopped()) {
         std::cout << "All primes are found" << std::endl;
+
+        for (int i = 0; i < NUMBER_OF_MEDIATORS; i++) {
+            std::cout << i + 1 << ": Prime - " << mediator_worker[i].prime_value << std::endl;
+        }
+        std::cout << NUMBER_OF_MEDIATORS + 1 << ": Prime - " << destination_worker.last_prime_value << std::endl;
+
+        std::cout << "Enter some value to exit...." << std::endl;
         std::cin.get();
         return EXIT_SUCCESS;
     }
@@ -272,7 +244,6 @@ int main() {
                 std::cout << "error string : SUBMIT_FAILED" << std::endl;
                 std::cout << "resubmitting the task" << std::endl;
                 json input = json::parse(cntxt._task_input);
-                // here you may fix something in the input
                 cntxt._task->resubmit(input);
                 break;
             }
@@ -291,9 +262,8 @@ int main() {
             }
         }
     } else {
-        std::cout << "logical error" << std::endl;
+        std::cout << "Error! Logical error" << std::endl;
     }
 
-    std::cout << "Error! Something broke..." << std::endl;
     return EXIT_FAILURE;
 }

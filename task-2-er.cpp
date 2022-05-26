@@ -17,10 +17,12 @@
 
 const int NUMBER_OF_MEDIATORS = 100;
 const int NUMBER_OF_BRICKS = 2;
-const int DELAY = 1;
+//const int DELAY = 1;
+#pragma cling load("libcurl")
 
 #include "templet.hpp"
-#include "basesim.hpp"
+//#include "basesim.hpp"
+#include "everest.hpp"
 #include <cmath>
 #include <iostream>
 #include <ctime>
@@ -78,7 +80,7 @@ struct source :public templet::actor {
 	/*$TET$*/
 };
 
-#pragma templet mediator(in?brick,out!brick,t:basesim)
+#pragma templet mediator(in?brick,out!brick,t:everest)
 
 struct mediator :public templet::actor {
 	static void on_in_adapter(templet::actor* a, templet::message* m) {
@@ -88,11 +90,11 @@ struct mediator :public templet::actor {
 		((mediator*)a)->on_out(*(brick*)m);
 	}
 	static void on_t_adapter(templet::actor* a, templet::task* t) {
-		((mediator*)a)->on_t(*(templet::basesim_task*)t);
+		((mediator*)a)->on_t(*(templet::everest_task*)t);
 	}
 
-	mediator(templet::engine& e, templet::basesim_engine& te_basesim) :mediator() {
-		mediator::engines(e, te_basesim);
+	mediator(templet::engine& e, templet::everest_engine& te_everest) :mediator() {
+		mediator::engines(e, te_everest);
 	}
 
 	mediator() :templet::actor(false),out(this, &on_out_adapter), t(this, &on_t_adapter)
@@ -100,12 +102,14 @@ struct mediator :public templet::actor {
 		/*$TET$mediator$mediator*/
 		_in = 0;
         prime_value = 0;
+
+        t.app_id("is-prime-app");
 		/*$TET$*/
 	}
 
-	void engines(templet::engine& e, templet::basesim_engine& te_basesim) {
+	void engines(templet::engine& e, templet::everest_engine& te_everest) {
 		templet::actor::engine(e);
-		t.engine(te_basesim);
+		t.engine(te_everest);
 		/*$TET$mediator$engines*/
 		/*$TET$*/
 	}
@@ -123,31 +127,45 @@ struct mediator :public templet::actor {
 		/*$TET$*/
 	}
 
-	inline void on_t(templet::basesim_task& t) {
+	inline void on_t(templet::everest_task& t) {
 		/*$TET$mediator$t*/
-		t.delay(DELAY);
-		pass_a_brick();
+		pass_a_brick(t);
 		/*$TET$*/
 	}
 
 	void in(brick& m) { m.bind(this, &on_in_adapter); }
 	brick out;
-	templet::basesim_task t;
+	templet::everest_task t;
 
 	/*$TET$mediator$$footer*/
 	void take_a_brick() {
 		if (access(_in) && access(out)) {
+            brick_ID = _in->brick_ID;
 
-			brick_ID = _in->brick_ID;
-			_in->send();
-			
-			t.submit();
+            if (prime_value) {
+                json in;
+                in["name"] = "is-prime-app";
+                in["inputs"]["checked"] = brick_ID;
+                in["inputs"]["prime"] = prime_value;
+
+                if (t.submit(in)) {
+                    std::cout << "task submit succeeded" << std::endl;
+                } else {
+                    std::cout << "task submit failed" << std::endl;
+                }
+            } else {
+                _in->send();
+            }
 		}
 	}
 
-	void pass_a_brick() {
+	void pass_a_brick(templet::everest_task& t) {
+        json resultJson = t.result();
+        int result = resultJson["result"];
+        _in->send();
+
 		if (prime_value) {
-			if (brick_ID % prime_value == 0) {
+			if (result == 0) {
                 return;
             }
 			out.brick_ID = brick_ID;
@@ -209,10 +227,18 @@ struct destination :public templet::actor {
 
 /*$TET$$footer*/
 
+
+
 int main()
 {
 	templet::engine eng;
-	templet::basesim_engine teng;
+    templet::everest_engine teng("67lmsc3r1b6ga82b1tf2mkrnoyu2sk2681tmebaw2gaihppk0dwflgycial1xppc");
+    teng.print_app_description("is-prime-app");
+
+    if (!teng) {
+        std::cout << "task engine is not connected to the Everest server..." << std::endl;
+        return EXIT_FAILURE;
+    }
 
 	source       source_worker(eng);
 	mediator     mediator_worker[NUMBER_OF_MEDIATORS];
@@ -220,8 +246,9 @@ int main()
 
 	mediator_worker[0].in(source_worker.out);
 
-	for (int i = 1; i < NUMBER_OF_MEDIATORS; i++)
-		mediator_worker[i].in(mediator_worker[i - 1].out);
+	for (int i = 1; i < NUMBER_OF_MEDIATORS; i++) {
+        mediator_worker[i].in(mediator_worker[i - 1].out);
+    }
 
 	destination_worker.in(mediator_worker[NUMBER_OF_MEDIATORS - 1].out);
 
@@ -240,10 +267,10 @@ int main()
 	if (eng.stopped()) {
 		std::cout << "All primes are found" << std::endl;
 
-		std::cout << "Maximum number of tasks executed in parallel : " << teng.Pmax() << std::endl;
-		std::cout << "Time of sequential execution of all tasks    : " << teng.T1() << std::endl;
-		std::cout << "Time of parallel execution of all tasks      : " << teng.Tp() << std::endl;
-		std::cout << "Speedup of parallel execution                : " << teng.T1() / teng.Tp() << std::endl;
+//		std::cout << "Maximum number of tasks executed in parallel : " << teng.Pmax() << std::endl;
+//		std::cout << "Time of sequential execution of all tasks    : " << teng.T1() << std::endl;
+//		std::cout << "Time of parallel execution of all tasks      : " << teng.Tp() << std::endl;
+//		std::cout << "Speedup of parallel execution                : " << teng.T1() / teng.Tp() << std::endl;
 		std::cin.get();
 		return EXIT_SUCCESS;
 	}

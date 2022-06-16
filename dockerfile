@@ -11,4 +11,4 @@ COPY config.json ./agent.conf
 COPY config.json /etc/everest_agent/agent.conf
 COPY config.json /etc/everest_agent/conf/agent.conf
 
-#bin/start.sh -c agent.conf
+CMD bin/start.sh -c agent.conf
